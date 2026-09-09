@@ -1,0 +1,17 @@
+{
+  "name": "balletweb",
+  "exports": "./main.ts",
+  "version": "1.0.0",
+  "tasks": {
+    "start": "deno run --allow-net --allow-read main.ts",
+    "dev": "deno run --watch --allow-net --allow-read main.ts",
+    "check": "deno check main.ts"
+  },
+  "imports": {
+    "@std/http": "jsr:@std/http@^1.0.12"
+  },
+  "compilerOptions": {
+    "strict": true
+  },
+  "exclude": [".git", "node_modules"]
+}

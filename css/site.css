@@ -1,0 +1,82 @@
+/* =========================================================================
+   Ballet replica — additive styles
+   Only the handful of rules needed to support interactions that the original
+   site drove from its Gatsby bundle. Everything else comes from the original
+   stylesheets, unchanged.
+   ========================================================================= */
+
+/* --- buy box ------------------------------------------------------------ */
+.shopify-module--galleryMain--72687 img { transition: opacity .28s ease; }
+.shopify-module--galleryMain--72687 img.is_swapping { animation: bl-img-swap .34s ease; }
+@keyframes bl-img-swap { from { opacity: .35; } to { opacity: 1; } }
+
+.shopify-module--row--53625:focus-visible,
+.shopify-module--logoItem--a339c:focus-visible,
+.shopify-module--packBtn--321f9:focus-visible,
+.homepage_manage_cell:focus-visible,
+.homepage_faq_question:focus-visible,
+.homepage_built_material_item:focus-visible {
+  outline: 2px solid #eebf29;
+  outline-offset: 3px;
+  border-radius: 8px;
+}
+
+/* wrap onto a second line only once the input is revealed, so the resting
+   height of the promo row stays identical to the reference (20px) */
+.shopify-module--promoRow--5b74f { flex-wrap: wrap; }
+.shopify-module--promoInputWrap {
+  display: flex; gap: 8px; flex: 0 0 100%; width: 100%; margin-top: 10px;
+}
+.shopify-module--promoInput {
+  flex: 1 1; background: #242425; border: 1px solid rgba(255,255,255,.14);
+  border-radius: 8px; color: #fff; padding: 10px 12px; font-size: 14px;
+  font-family: inherit; outline: none;
+}
+.shopify-module--promoInput:focus { border-color: #eebf29; }
+.shopify-module--promoApply {
+  background: #eebf29; border: 0; border-radius: 8px; color: #161617;
+  cursor: pointer; font-family: inherit; font-size: 14px; font-weight: 700;
+  padding: 10px 18px;
+}
+.shopify-module--promoApply:hover { background: #f6cc4a; }
+
+.shopify-module--orderBtn--f6a22:disabled,
+.shopify-module--orderBtn--f6a22.is_disabled { opacity: .45; cursor: not-allowed; }
+
+.shopify-module--termsRow--c6880.shake { animation: bl-shake .45s cubic-bezier(.36,.07,.19,.97); }
+@keyframes bl-shake {
+  10%, 90% { transform: translateX(-2px); }
+  20%, 80% { transform: translateX(3px); }
+  30%, 50%, 70% { transform: translateX(-5px); }
+  40%, 60% { transform: translateX(5px); }
+}
+
+/* --- mobile accordion (header) ------------------------------------------ */
+.ant-collapse-item-active .ant-collapse-arrow { transform: rotate(90deg); }
+.ballet-layout .navbar .navbar-end .ant-collapse-header { cursor: pointer; }
+.ant-collapse-item .select-content { max-height: 0; overflow: hidden; transition: max-height .35s ease; }
+.ant-collapse-item-active .select-content { max-height: 1400px; }
+
+/* --- newsletter local confirmation -------------------------------------- */
+.newsletter-ok {
+  color: #eebf29; font-family: Inter, sans-serif; font-size: 15px;
+  line-height: 1.5; margin: 14px 0 0; text-align: center; width: 100%;
+}
+
+/* --- language dropdown --------------------------------------------------- */
+.footer_languagebar_select .footer_languagebar_dropdown .ant-select-item-option,
+.header_languagebar_select .header_languagebar_dropdown .ant-select-item-option {
+  cursor: pointer; padding: 6px 10px; font-size: 14px; color: #fff;
+}
+.footer_languagebar_select .footer_languagebar_dropdown .ant-select-item-option:hover,
+.header_languagebar_select .header_languagebar_dropdown .ant-select-item-option:hover {
+  color: #eebf29;
+}
+.footer_languagebar_select { color: silver; }
+
+/* --- pinned intro safety ------------------------------------------------- */
+.homepage_pinintro_stage { z-index: 1; }
+.homepage_pinintro_slide { transition: none; }
+@media (prefers-reduced-motion: reduce) {
+  .homepage_pinintro_slide { transition: opacity .3s ease !important; }
+}

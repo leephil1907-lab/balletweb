@@ -80,3 +80,17 @@
 @media (prefers-reduced-motion: reduce) {
   .homepage_pinintro_slide { transition: opacity .3s ease !important; }
 }
+
+/* -------------------------------------------------------------------------
+   gatsby-plugin-image runtime styles.
+   The reference injects these from JS at runtime; this build is static, so
+   they are reproduced here. Without them, images that use
+   .gatsby-image-wrapper-constrained render at double height (the fallback
+   <img> stacks under the main one instead of being absolutely positioned).
+   Verified present on www.ballet.com via document.styleSheets (inline rules).
+   ------------------------------------------------------------------------- */
+.gatsby-image-wrapper { position: relative; overflow: hidden; }
+.gatsby-image-wrapper picture.object-fit-polyfill { position: static !important; }
+.gatsby-image-wrapper img { inset: 0px; height: 100%; margin: 0px; max-width: none; padding: 0px; position: absolute; width: 100%; object-fit: cover; }
+.gatsby-image-wrapper [data-main-image] { opacity: 0; transform: translateZ(0px); transition: opacity 0.25s linear; will-change: opacity; }
+.gatsby-image-wrapper-constrained { display: inline-block; vertical-align: top; }

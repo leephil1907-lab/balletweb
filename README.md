@@ -34,6 +34,49 @@ Or serve the folder with any static server — the pages are plain HTML.
 `/cbc/personalize/`, `/cbc/techspec/`, `/cgc/`, `/cobranded/`, `/collaborations/`,
 `/reseller/`.
 
+## Site metadata & app icons
+
+Site identity is applied by `/home/user/apply_meta.py` (edit `DOMAIN` / `SITE_NAME`
+at the top and re-run — it is idempotent, and backs up to `/tmp/meta_backup`
+before touching anything).
+
+**Name** — `Ballet` across `og:site_name`, `application-name`,
+`apple-mobile-web-app-title` and the manifest (`short_name: Ballet`).
+
+**Canonical URLs** — all 27 pages carry `rel="canonical"` and `og:url` pointing
+at `https://balletweb-b90x2z6eqvnp.leephil1907-lab.deno.net/<path>`.
+
+**Descriptions** — every page has a unique `description` and `og:description`.
+Six were longer than 160 chars and were rewritten so search engines don't
+truncate them.
+
+**App icons** — full set, all self-hosted:
+
+| File | Sizes | Purpose |
+|---|---|---|
+| `favicon.svg` | vector | traced from the original 512px mark (IoU 0.993) |
+| `favicon.ico` | 16, 32, 48 | browsers request `/favicon.ico` unprompted |
+| `favicon-16x16.png`, `favicon-32x32.png` | 16, 32 | legacy tab icons |
+| `apple-touch-icon.png` | 180 | iOS home screen |
+| `android-chrome-192x192.png`, `android-chrome-512x512.png` | 192, 512 | Android install |
+| `android-chrome-maskable-512.png` | 512 | Android adaptive icon (safe-zone padded) |
+| `icon-1024.png` | 1024 | app stores / high-DPI |
+
+**Social preview** — `og:image` and `twitter:image` are self-hosted 1200×630
+JPEGs in `/og/` (`og-default.jpg`, plus `og-app.jpg` for `/app/`), so link
+previews resolve from this domain rather than the original CDN.
+
+**Manifest** (`site.webmanifest`) — `start_url`, `id`, `scope`, `description`,
+`categories`, 8 icons including a `maskable` entry, `theme_color: #111f3e`,
+`background_color: #ffffff`.
+
+Also added per page: light/dark `theme-color`, `og:locale`, `robots` with
+`max-image-preview:large`, and `msapplication-TileColor` / `TileImage`.
+
+Note: `agreement/index.html` intentionally still links to
+`http://www.ballet.com/` — that is inside the legal boilerplate, which cites
+the company's own website by name.
+
 ## Support chat
 
 Live agents are served by **Smartsupp**. The key lives in `js/chat-config.js`:

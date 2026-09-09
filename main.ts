@@ -75,8 +75,11 @@ function notFound(): Response {
   });
 }
 
+// Deno Deploy injects PORT; fall back to 8000 for local runs.
+const PORT = Number(Deno.env.get("PORT")) || 8000;
+
 Deno.serve(
-  { onListen: ({ port, hostname }) => console.log(`Ballet listening on http://${hostname}:${port}`) },
+  { port: PORT, onListen: ({ port, hostname }) => console.log(`Ballet listening on http://${hostname}:${port}`) },
   async (req: Request): Promise<Response> => {
     const url = new URL(req.url);
     let { pathname } = url;

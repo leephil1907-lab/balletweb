@@ -1,8 +1,9 @@
 # balletweb
 
-A 1:1 static replica of [ballet.com](https://www.ballet.com) — structure, fonts, layout,
-design and scroll-driven animations — with an enhanced, stable site flow and a
-Smartsupp-powered support chat.
+A static replica of [ballet.com](https://www.ballet.com) with the current reference
+home-page flow, repository-specific product detail sections, and Smartsupp-powered
+support chat. See [REFERENCE_AUDIT.md](REFERENCE_AUDIT.md) for the comparison and
+motion/interaction notes.
 
 Built as pre-rendered static HTML/CSS/JS. No build step, no framework runtime.
 
@@ -36,9 +37,16 @@ Or serve the folder with any static server — the pages are plain HTML.
 
 ## Site metadata & app icons
 
-Site identity is applied by `/home/user/apply_meta.py` (edit `DOMAIN` / `SITE_NAME`
-at the top and re-run — it is idempotent, and backs up to `/tmp/meta_backup`
-before touching anything).
+Metadata is checked into each pre-rendered page's `<head>`; there is no external
+metadata script required. Titles and descriptions are unique by route, while
+canonical URLs and social cards stay aligned with the deployed site.
+
+**Homepage title** — `Ballet Cold Storage Wallet | 100% Offline Crypto`.
+
+**Homepage description** — `Store Bitcoin, crypto, and NFTs offline with Ballet’s
+cold storage wallets. No account, firmware, or seed phrase setup—scan, verify,
+and stay in control.` The same copy is used for the Open Graph and X/Twitter
+share description.
 
 **Name** — `Ballet` across `og:site_name`, `application-name`,
 `apple-mobile-web-app-title` and the manifest (`short_name: Ballet`).
@@ -46,21 +54,21 @@ before touching anything).
 **Canonical URLs** — all 27 pages carry `rel="canonical"` and `og:url` pointing
 at `https://balletweb-b90x2z6eqvnp.leephil1907-lab.deno.net/<path>`.
 
-**Descriptions** — every page has a unique `description` and `og:description`.
-Six were longer than 160 chars and were rewritten so search engines don't
-truncate them.
+**Descriptions** — every page has its own concise `description` and
+`og:description`; social image alt text describes the actual product imagery.
 
-**App icons** — full set, all self-hosted:
+**App icons** — a coordinated, self-hosted set using Ballet's dark-brown mark on
+an opaque white field so the logo stays legible on light and dark device chrome:
 
 | File | Sizes | Purpose |
 |---|---|---|
-| `favicon.svg` | vector | traced from the original 512px mark (IoU 0.993) |
-| `favicon.ico` | 16, 32, 48 | browsers request `/favicon.ico` unprompted |
-| `favicon-16x16.png`, `favicon-32x32.png` | 16, 32 | legacy tab icons |
+| `favicon.svg` | vector | sharp tab icon at any scale |
+| `favicon.ico` | 16, 32, 48 | multi-size fallback for browsers |
+| `favicon-16x16.png`, `favicon-32x32.png` | 16, 32 | PNG tab icons |
 | `apple-touch-icon.png` | 180 | iOS home screen |
-| `android-chrome-192x192.png`, `android-chrome-512x512.png` | 192, 512 | Android install |
-| `android-chrome-maskable-512.png` | 512 | Android adaptive icon (safe-zone padded) |
-| `icon-1024.png` | 1024 | app stores / high-DPI |
+| `android-chrome-192x192.png`, `android-chrome-512x512.png` | 192, 512 | standard PWA install icons |
+| `android-chrome-maskable-512.png` | 512 | Android adaptive icon, mark kept inside the maskable safe area |
+| `icon-1024.png` | 1024 | high-resolution app artwork |
 
 **Social preview** — `og:image` and `twitter:image` are self-hosted 1200×630
 JPEGs in `/og/` (`og-default.jpg`, plus `og-app.jpg` for `/app/`), so link
@@ -68,9 +76,9 @@ previews resolve from this domain rather than the original CDN.
 
 **Manifest** (`site.webmanifest`) — `start_url`, `id`, `scope`, `description`,
 `categories`, 8 icons including a `maskable` entry, `theme_color: #111f3e`,
-`background_color: #ffffff`.
+`background_color: #000000` to match the dark home-screen launch surface.
 
-Also added per page: light/dark `theme-color`, `og:locale`, `robots` with
+Also included per page: light/dark `theme-color`, `og:locale`, `robots` with
 `max-image-preview:large`, and `msapplication-TileColor` / `TileImage`.
 
 Note: `agreement/index.html` intentionally still links to

@@ -28,7 +28,13 @@
     var h = header.getBoundingClientRect().height;
     var n = nav ? nav.getBoundingClientRect().height : 0;
     var s = document.documentElement.style;
-    if (h) s.setProperty('--header-h', h + 'px');
+    if (h) {
+      s.setProperty('--header-h', h + 'px');
+      // The pinned story uses the full alert + navigation stack as its sticky
+      // offset. Keep this live instead of relying on the captured 120px value.
+      var pin = $('.homepage_pinintro');
+      if (pin) pin.style.setProperty('--pin-header', h + 'px');
+    }
     if (n) s.setProperty('--nav-h', n + 'px');
   }
 
@@ -69,26 +75,63 @@
   function initNav() {
     var burger = $('.navbar-burger');
     var menu = $('#navMenu');
+    var header = $('.ballet-layout-header');
+
+    function setMenuOpen(open, returnFocus) {
+      if (!burger || !menu) return;
+      burger.classList.toggle('is-active', open);
+      menu.classList.toggle('is-active', open);
+      burger.setAttribute('aria-expanded', open ? 'true' : 'false');
+      burger.setAttribute('aria-controls', menu.id || 'navMenu');
+      document.body.style.overflow = open ? 'hidden' : '';
+      if (!open && returnFocus) burger.focus();
+    }
+
     if (burger && menu) {
+      setMenuOpen(menu.classList.contains('is-active'), false);
       burger.addEventListener('click', function () {
-        var open = burger.classList.toggle('is-active');
-        menu.classList.toggle('is-active', open);
-        burger.setAttribute('aria-expanded', open ? 'true' : 'false');
-        document.body.style.overflow = open ? 'hidden' : '';
+        setMenuOpen(!menu.classList.contains('is-active'), false);
+      });
+      menu.querySelectorAll('a[href]').forEach(function (link) {
+        link.addEventListener('click', function () {
+          if (menu.classList.contains('is-active')) setMenuOpen(false, false);
+        });
+      });
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && menu.classList.contains('is-active')) {
+          setMenuOpen(false, true);
+        }
+      });
+      document.addEventListener('click', function (e) {
+        if (menu.classList.contains('is-active') && header && !header.contains(e.target)) {
+          setMenuOpen(false, false);
+        }
       });
     }
 
     // Mobile accordion (Cards / Business groups)
     $$('.ant-collapse-header').forEach(function (head) {
       var item = head.closest('.ant-collapse-item');
-      if (!item) return;
+      // Plain navigation rows already contain a link; leave those native links
+      // alone and only wire actual accordion headings here.
+      if (!item || head.querySelector('a[href]')) return;
+      if (!head.hasAttribute('role')) head.setAttribute('role', 'button');
+      if (!head.hasAttribute('tabindex')) head.setAttribute('tabindex', '0');
+      head.setAttribute('aria-expanded', item.classList.contains('ant-collapse-item-active') ? 'true' : 'false');
       // keep the direct link inside a header clickable on its own
       head.addEventListener('click', function (e) {
         if (e.target.closest('a')) return;
         e.preventDefault();
         var open = item.classList.toggle('ant-collapse-item-active');
+        head.setAttribute('aria-expanded', open ? 'true' : 'false');
         var icon = item.querySelector('.ant-collapse-arrow');
         if (icon) icon.style.transform = open ? 'rotate(90deg)' : '';
+      });
+      head.addEventListener('keydown', function (e) {
+        if ((e.key === 'Enter' || e.key === ' ') && !e.target.closest('a')) {
+          e.preventDefault();
+          head.click();
+        }
       });
     });
 
@@ -97,10 +140,15 @@
     $$('.navbar-haveContent').forEach(function (item) {
       if (item.closest('.navbar-end.is-hidden-widescreen')) return;
       item.setAttribute('aria-haspopup', 'true');
+      if (!item.hasAttribute('tabindex')) item.setAttribute('tabindex', '0');
       item.addEventListener('keydown', function (e) {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
-          item.classList.toggle('is-open');
+          var open = item.classList.toggle('is-open');
+          item.setAttribute('aria-expanded', open ? 'true' : 'false');
+        } else if (e.key === 'Escape') {
+          item.classList.remove('is-open');
+          item.setAttribute('aria-expanded', 'false');
         }
       });
     });
@@ -181,6 +229,7 @@
         var ty = shift * ((i > 0 ? (1 - g[i - 1]) : 0) - (i < N - 1 ? g[i] : 0));
         slide.style.opacity = op.toFixed(4);
         slide.style.visibility = op > 0.001 ? 'visible' : 'hidden';
+        slide.setAttribute('aria-hidden', op > 0.001 ? 'false' : 'true');
         slide.style.transform = 'translate3d(0,' + ty.toFixed(2) + 'px,0)';
 
         // staggered reveal of the heading + description on the advantage slides
@@ -197,18 +246,41 @@
     }
 
     if (REDUCED) {
-      slides.forEach(function (s, i) {
-        s.style.opacity = i === 0 ? '1' : '0';
-        s.style.visibility = i === 0 ? 'visible' : 'hidden';
+      // A reduced-motion preference should remove the long pinned scroll, not
+      // leave the next two story panels hidden behind a 400vh blank section.
+      pin.classList.add('motion-reduced');
+      slides.forEach(function (s) {
+        s.style.opacity = '1';
+        s.style.visibility = 'visible';
+        s.style.transform = 'none';
+        s.setAttribute('aria-hidden', 'false');
+        var top = s.querySelector('.homepage_advantage_top');
+        var desc = s.querySelector('.homepage_advantage_desc');
+        if (top) { top.style.opacity = '1'; top.style.transform = 'none'; }
+        if (desc) { desc.style.opacity = '1'; desc.style.transform = 'none'; }
       });
       return;
     }
 
     var ticking = false;
+    function refreshLayout() {
+      measureHeader();
+      lastProgress = null;
+      update();
+    }
     window.addEventListener('scroll', function () {
       if (!ticking) { ticking = true; raf(function () { update(); ticking = false; }); }
     }, { passive: true });
-    window.addEventListener('resize', function () { lastProgress = null; update(); });
+    window.addEventListener('resize', refreshLayout, { passive: true });
+    window.addEventListener('load', refreshLayout, { once: true });
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(refreshLayout);
+    if ('ResizeObserver' in window) {
+      var header = $('.ballet-layout-header');
+      if (header) {
+        var ro = new ResizeObserver(refreshLayout);
+        ro.observe(header);
+      }
+    }
     update();
   }
 
@@ -217,20 +289,57 @@
         and on tap (mobile), matching the reference behaviour.
   --------------------------------------------------------------------- */
   function initHowItWorks() {
-    var wrap = $('.homepage_howitworks_diagram_wrap');
-    if (wrap) {
-      // desktop uses :hover in CSS; add tap support for touch
-      wrap.addEventListener('click', function () {
-        if (window.matchMedia('(hover: none)').matches) {
-          wrap.classList.toggle('is_open');
+    function wireDiagram(wrap, tracksHover) {
+      if (!wrap) return;
+      var closeImage = wrap.querySelector('.homepage_howitworks_diagram_close, .homepage_howitworks_mdiagram_close');
+      var openImage = wrap.querySelector('.homepage_howitworks_diagram_open, .homepage_howitworks_mdiagram_open');
+      var pressed = wrap.classList.contains('is_open');
+      var hovered = false;
+
+      wrap.setAttribute('role', 'button');
+      wrap.setAttribute('tabindex', '0');
+      wrap.setAttribute('aria-label', 'Show or hide the card security details');
+
+      function paint(open) {
+        wrap.classList.toggle('is_open', open);
+        if (closeImage) closeImage.setAttribute('aria-hidden', open ? 'true' : 'false');
+        if (openImage) openImage.setAttribute('aria-hidden', open ? 'false' : 'true');
+      }
+      function toggle() {
+        pressed = !pressed;
+        wrap.setAttribute('aria-pressed', pressed ? 'true' : 'false');
+        paint(pressed || hovered);
+      }
+      wrap.setAttribute('aria-pressed', pressed ? 'true' : 'false');
+      paint(pressed);
+
+      wrap.addEventListener('click', toggle);
+      wrap.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          toggle();
         }
       });
+
+      // Keep the desktop hover reveal and the touch/keyboard toggle in sync.
+      if (tracksHover) {
+        wrap.addEventListener('pointerenter', function (e) {
+          if (e.pointerType === 'mouse') {
+            hovered = true;
+            paint(true);
+          }
+        });
+        wrap.addEventListener('pointerleave', function (e) {
+          if (e.pointerType === 'mouse') {
+            hovered = false;
+            paint(pressed);
+          }
+        });
+      }
     }
 
-    var mwrap = $('.homepage_howitworks_mdiagram_wrap');
-    if (mwrap) {
-      mwrap.addEventListener('click', function () { mwrap.classList.toggle('is_open'); });
-    }
+    wireDiagram($('.homepage_howitworks_diagram_wrap'), true);
+    wireDiagram($('.homepage_howitworks_mdiagram_wrap'), false);
   }
 
   /* ---------------------------------------------------------------------
@@ -238,19 +347,48 @@
   --------------------------------------------------------------------- */
   function initBuilt() {
     var flip = $('.homepage_built_card_flip');
-    if (flip) flip.addEventListener('click', function () { flip.classList.toggle('is_flipped'); });
+    if (flip) {
+      function setFlipped(flipped) {
+        flip.classList.toggle('is_flipped', flipped);
+        flip.setAttribute('aria-pressed', flipped ? 'true' : 'false');
+        flip.setAttribute('aria-label', flipped ? 'Flip card to see the front' : 'Flip card to see the back');
+      }
+      setFlipped(flip.classList.contains('is_flipped') || flip.getAttribute('aria-pressed') === 'true');
+      // Native button click activation covers touch, mouse, Enter, and Space.
+      flip.addEventListener('click', function () {
+        setFlipped(!flip.classList.contains('is_flipped'));
+      });
+    }
 
     var items = $$('.homepage_built_material_item');
+    var list = $('.homepage_built_materials');
+    var selected = items.findIndex(function (btn) { return btn.getAttribute('aria-checked') === 'true'; });
+    if (selected < 0) selected = 0;
+    if (list) list.setAttribute('role', 'radiogroup');
+
+    function selectMaterial(index, moveFocus) {
+      if (!items.length) return;
+      selected = (index + items.length) % items.length;
+      items.forEach(function (btn, i) {
+        btn.setAttribute('aria-checked', i === selected ? 'true' : 'false');
+        btn.setAttribute('role', 'radio');
+        btn.setAttribute('tabindex', i === selected ? '0' : '-1');
+      });
+      if (moveFocus) items[selected].focus();
+    }
+    selectMaterial(selected, false);
     items.forEach(function (btn, i) {
-      btn.setAttribute('aria-checked', i === 0 ? 'true' : 'false');
-      btn.setAttribute('role', 'radio');
-      btn.addEventListener('click', function () {
-        items.forEach(function (b) { b.setAttribute('aria-checked', 'false'); });
-        btn.setAttribute('aria-checked', 'true');
+      btn.addEventListener('click', function () { selectMaterial(i, false); });
+      btn.addEventListener('keydown', function (e) {
+        if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+          e.preventDefault();
+          selectMaterial(selected + 1, true);
+        } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+          e.preventDefault();
+          selectMaterial(selected - 1, true);
+        }
       });
     });
-    var list = $('.homepage_built_materials');
-    if (list) list.setAttribute('role', 'radiogroup');
   }
 
   /* ---------------------------------------------------------------------
@@ -532,22 +670,40 @@
   --------------------------------------------------------------------- */
   function initFaq() {
     var items = $$('.homepage_faq_item');
-    items.forEach(function (item) {
+    items.forEach(function (item, index) {
       var q = $('.homepage_faq_question', item);
+      var answer = $('.homepage_faq_answer_wrapper', item);
       if (!q) return;
       q.setAttribute('tabindex', '0');
       q.setAttribute('role', 'button');
       q.setAttribute('aria-expanded', 'false');
+      if (answer) {
+        if (!answer.id) answer.id = 'homepage-faq-answer-' + (index + 1);
+        answer.setAttribute('role', 'region');
+        answer.setAttribute('aria-hidden', 'true');
+        answer.setAttribute('inert', '');
+        q.setAttribute('aria-controls', answer.id);
+      }
+
       function toggle() {
-        var open = item.classList.contains('homepage_faq_item_open');
+        var shouldOpen = !item.classList.contains('homepage_faq_item_open');
         items.forEach(function (other) {
+          var otherQ = $('.homepage_faq_question', other);
+          var otherAnswer = $('.homepage_faq_answer_wrapper', other);
           other.classList.remove('homepage_faq_item_open');
-          var oq = $('.homepage_faq_question', other);
-          if (oq) oq.setAttribute('aria-expanded', 'false');
+          if (otherQ) otherQ.setAttribute('aria-expanded', 'false');
+          if (otherAnswer) {
+            otherAnswer.setAttribute('aria-hidden', 'true');
+            otherAnswer.setAttribute('inert', '');
+          }
         });
-        if (!open) {
+        if (shouldOpen) {
           item.classList.add('homepage_faq_item_open');
           q.setAttribute('aria-expanded', 'true');
+          if (answer) {
+            answer.setAttribute('aria-hidden', 'false');
+            answer.removeAttribute('inert');
+          }
         }
       }
       q.addEventListener('click', toggle);
@@ -575,7 +731,26 @@
   }
 
   /* ---------------------------------------------------------------------
-     11. Scroll reveals
+     11. Event ticker — keep the marquee accessible and easy to pause
+  --------------------------------------------------------------------- */
+  function initAwardTicker() {
+    var ticker = $('.homepage_award_ticker');
+    if (!ticker) return;
+    ticker.setAttribute('role', 'region');
+    ticker.setAttribute('aria-label', 'Ballet events and awards');
+    ticker.setAttribute('tabindex', '0');
+    var items = $$('.homepage_award_ticker_item', ticker);
+    // The second half is the seamless-loop copy, not new information.
+    if (items.length > 1 && items.length % 2 === 0) {
+      var firstCopyCount = items.length / 2;
+      items.forEach(function (item, i) {
+        if (i >= firstCopyCount) item.setAttribute('aria-hidden', 'true');
+      });
+    }
+  }
+
+  /* ---------------------------------------------------------------------
+     12. Scroll reveals
   --------------------------------------------------------------------- */
   function initReveal() {
     var els = $$('.scroll-reveal');
@@ -592,11 +767,16 @@
         }
       });
     }, { threshold: 0.12, rootMargin: '0px 0px -8% 0px' });
-    els.forEach(function (e) { io.observe(e); });
+    els.forEach(function (e) {
+      // Captured/static HTML can contain a stale is-visible class from a prior
+      // visit. Reset it so the observer owns the reveal timing on this visit.
+      e.classList.remove('is-visible');
+      io.observe(e);
+    });
   }
 
   /* ---------------------------------------------------------------------
-     12. Anchor links + newsletter
+     13. Anchor links + newsletter
   --------------------------------------------------------------------- */
   function initAnchors() {
     $$('a[href^="#"]').forEach(function (a) {
@@ -645,7 +825,7 @@
   }
 
   /* ---------------------------------------------------------------------
-     13. Language selector (footer + header)
+     14. Language selector (footer + header)
   --------------------------------------------------------------------- */
   function initLangSelect() {
     var LANGS = [
@@ -710,6 +890,7 @@
     initBuyBox();
     initFaq();
     initBackToTop();
+    initAwardTicker();
     initReveal();
     initAnchors();
     initNewsletter();

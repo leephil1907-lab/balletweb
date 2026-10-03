@@ -1,7 +1,7 @@
 {
-  "name": "Ballet — Crypto Cold Storage Wallet",
+  "name": "Ballet — Cold Storage Wallet",
   "short_name": "Ballet",
-  "description": "Ballet cold storage wallets keep your crypto 100% offline. No setup, no firmware, no seed phrase to manage — just scan, activate and store.",
+  "description": "Store Bitcoin, crypto, and NFTs offline with Ballet’s cold storage wallets. No account, firmware, or seed phrase setup—scan, verify, and stay in control.",
   "id": "/",
   "start_url": "/",
   "scope": "/",
@@ -14,7 +14,7 @@
     "shopping",
     "security"
   ],
-  "background_color": "#ffffff",
+  "background_color": "#000000",
   "theme_color": "#111f3e",
   "icons": [
     {

@@ -1,8 +1,7 @@
 /* =========================================================================
-   Ballet replica — additive styles
-   Only the handful of rules needed to support interactions that the original
-   site drove from its Gatsby bundle. Everything else comes from the original
-   stylesheets, unchanged.
+   Ballet replica — additive interaction, motion and accessibility styles
+   The captured design bundles stay untouched; these rules make the static
+   build's interactions resilient and progressively enhanced.
    ========================================================================= */
 
 /* --- buy box ------------------------------------------------------------ */
@@ -94,3 +93,104 @@
 .gatsby-image-wrapper img { inset: 0px; height: 100%; margin: 0px; max-width: none; padding: 0px; position: absolute; width: 100%; object-fit: cover; }
 .gatsby-image-wrapper [data-main-image] { opacity: 0; transform: translateZ(0px); transition: opacity 0.25s linear; will-change: opacity; }
 .gatsby-image-wrapper-constrained { display: inline-block; vertical-align: top; }
+
+/* --- cross-page motion -------------------------------------------------- */
+/* Cross-document View Transitions are progressive enhancement: browsers
+   without support keep the usual full-page navigation behaviour. */
+@view-transition { navigation: auto; }
+::view-transition-old(root) { animation: ballet-page-out .14s ease both; }
+::view-transition-new(root) { animation: ballet-page-in .28s cubic-bezier(.22, 1, .36, 1) both; }
+@keyframes ballet-page-out { to { opacity: .78; } }
+@keyframes ballet-page-in {
+  from { opacity: .78; transform: translateY(5px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Pause the reference-style marquee whenever a visitor points at it or tabs
+   into it. The JS marks only the repeated half as decorative for screen readers. */
+.homepage_award_ticker:hover .homepage_award_ticker_track,
+.homepage_award_ticker:focus .homepage_award_ticker_track,
+.homepage_award_ticker:focus-within .homepage_award_ticker_track {
+  animation-play-state: paused;
+}
+.homepage_award_ticker:focus-visible {
+  outline: 2px solid #111f3e;
+  outline-offset: -4px;
+}
+
+/* Reduced motion turns the pinned, scroll-scrubbed story into three calm
+   static panels. This also works before JavaScript has started. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: .01ms !important;
+  }
+  ::view-transition-old(root),
+  ::view-transition-new(root) { animation: none !important; }
+  .scroll-reveal,
+  .scroll-reveal.is-visible {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+  }
+  .homepage_award_ticker_track,
+  .homepage_trust_photowall_track,
+  .homepage_supportcoins_track {
+    animation: none !important;
+  }
+  .homepage_pinintro { height: auto !important; }
+  .homepage_pinintro_stage {
+    height: auto !important;
+    overflow: visible !important;
+    position: relative !important;
+    top: auto !important;
+  }
+  .homepage_pinintro_slide,
+  .homepage_pinintro_slide:first-child {
+    display: block;
+    inset: auto !important;
+    min-height: clamp(34rem, 75svh, 52rem);
+    opacity: 1 !important;
+    position: relative !important;
+    transform: none !important;
+    visibility: visible !important;
+    will-change: auto !important;
+  }
+  .homepage_pinintro_slide .homepage_noaccount,
+  .homepage_pinintro_slide .homepage_advantage {
+    height: auto !important;
+    min-height: clamp(34rem, 75svh, 52rem);
+  }
+  .homepage_pinintro_slide .homepage_advantage_top,
+  .homepage_pinintro_slide .homepage_advantage_desc {
+    opacity: 1 !important;
+    transform: none !important;
+    will-change: auto !important;
+  }
+  .homepage_pinintro_slide .homepage_noaccount_phone {
+    max-height: 58svh;
+  }
+}
+
+/* Touch and keyboard interaction fallbacks for the legacy feature diagrams. */
+.homepage_howitworks_diagram_wrap,
+.homepage_howitworks_mdiagram_wrap {
+  touch-action: manipulation;
+}
+.homepage_howitworks_diagram_wrap.is_open .homepage_howitworks_diagram_close {
+  opacity: 0;
+}
+.homepage_howitworks_diagram_wrap.is_open .homepage_howitworks_diagram_open {
+  opacity: 1;
+}
+.homepage_howitworks_diagram_wrap:focus-visible,
+.homepage_howitworks_mdiagram_wrap:focus-visible {
+  border-radius: 8px;
+  outline: 2px solid #eebf29;
+  outline-offset: 4px;
+}
+.homepage_built_card_flip {
+  touch-action: manipulation;
+}

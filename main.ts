@@ -1,116 +1,66 @@
 /**
  * Ballet — static site server for Deno Deploy
  * ---------------------------------------------------------------------------
- * Serves the pre-rendered 1:1 replica with:
- *   • clean URLs      /swap  ->  /swap/  ->  /swap/index.html
- *   • correct MIME    webp / woff2 / svg / json / webmanifest
- *   • cache policy    immutable for hashed assets, revalidate for HTML
- *   • on-brand 404
- *
- * Deno Deploy picks this file up automatically as the entry point.
+ * Serves the pre-rendered site with clean URLs, correct MIME types, caching,
+ * a themed 404, and a site-wide support-chat bootstrap.
  */
 
 import { serveDir } from "jsr:@std/http@^1.0.0/file-server";
 
 const ROOT = import.meta.dirname ?? ".";
-
-/** Hashed / versioned build output — safe to cache forever. */
 const IMMUTABLE = /^\/(static|shop|fonts)\//;
+const SHORT_CACHE = /^(\/css\/site\.css|\/js\/)$/;
 
-/** First-party files we may still edit after deploy. */
-const SHORT_CACHE = /^\/(css\/site\.css|js\/)/;
+function injectSiteRuntime(html: string): string {
+  if (!html || html.includes('/js/chat.js')) return html;
+  const runtime = '\n<script src="/js/chat-config.js" defer></script>\n<script src="/js/chat.js" defer></script>\n<script src="/js/chat-hotfix.js" defer></script>\n';
+  return html.includes('</body>') ? html.replace('</body>', runtime + '</body>') : html + runtime;
+}
 
-function withHeaders(res: Response, pathname: string): Response {
+async function withHeaders(res: Response, pathname: string): Promise<Response> {
   const type = res.headers.get("content-type") || "";
   const isHtml = type.startsWith("text/html");
-
   let cacheControl = "public, max-age=600";
+  let body: BodyInit | null = res.body;
 
-  if (IMMUTABLE.test(pathname)) {
-    cacheControl = "public, max-age=31536000, immutable";
-  } else if (isHtml) {
-    // HTML must be revalidated so edits go live immediately.
+  if (IMMUTABLE.test(pathname)) cacheControl = "public, max-age=31536000, immutable";
+  else if (isHtml) {
     cacheControl = "public, max-age=0, must-revalidate";
-  } else if (SHORT_CACHE.test(pathname)) {
-    cacheControl = "public, max-age=60, must-revalidate";
-  } else if (/\.css$/.test(pathname)) {
-    cacheControl = "public, max-age=31536000, immutable";
-  }
+    body = injectSiteRuntime(await res.text());
+  } else if (SHORT_CACHE.test(pathname)) cacheControl = "public, max-age=60, must-revalidate";
+  else if (/\.css$/.test(pathname)) cacheControl = "public, max-age=31536000, immutable";
 
   const headers = new Headers(res.headers);
   headers.set("Cache-Control", cacheControl);
   headers.set("X-Content-Type-Options", "nosniff");
   headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
-  return new Response(res.body, { status: res.status, headers });
+  return new Response(body, { status: res.status, headers });
 }
 
-const NOT_FOUND = `<!doctype html>
-<html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Page not found — Ballet</title>
-<link rel="stylesheet" href="/fonts/fonts.css">
-<style>
-  html,body{margin:0;height:100%}
-  body{background:#111f3e;color:#fff;font-family:Inter,"Noto Sans",system-ui,sans-serif;
-       display:flex;align-items:center;justify-content:center;text-align:center;padding:24px}
-  .w{max-width:560px}
-  h1{font-family:Montserrat,Inter,system-ui,sans-serif;font-weight:700;font-size:72px;
-     margin:0 0 8px;color:#eebf29;letter-spacing:-.02em}
-  h2{font-family:Montserrat,Inter,system-ui,sans-serif;font-weight:700;font-size:22px;margin:0 0 14px}
-  p{color:#b6b6b6;line-height:1.6;margin:0 0 28px}
-  a{display:inline-block;background:#eebf29;color:#0d1526;text-decoration:none;
-    font-weight:700;padding:14px 30px;border-radius:8px}
-  a:hover{background:#f6cc4a}
-</style></head>
-<body><div class="w">
-  <h1>404</h1><h2>This page could not be found</h2>
-  <p>The link may be broken, or the page may have been moved.</p>
-  <a href="/">Back to Ballet</a>
-</div></body></html>`;
+const NOT_FOUND = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Page not found — Ballet</title><link rel="stylesheet" href="/fonts/fonts.css"><style>html,body{margin:0;height:100%}body{background:#111f3e;color:#fff;font-family:Inter,"Noto Sans",system-ui,sans-serif;display:flex;align-items:center;justify-content:center;text-align:center;padding:24px}.w{max-width:560px}h1{font-family:Montserrat,Inter,system-ui,sans-serif;font-weight:700;font-size:72px;margin:0 0 8px;color:#eebf29}h2{font-family:Montserrat,Inter,system-ui,sans-serif;font-size:22px;margin:0 0 14px}p{color:#b6b6b6;line-height:1.6;margin:0 0 28px}a{display:inline-block;background:#eebf29;color:#0d1526;text-decoration:none;font-weight:700;padding:14px 30px;border-radius:8px}</style></head><body><div class="w"><h1>404</h1><h2>This page could not be found</h2><p>The link may be broken, or the page may have been moved.</p><a href="/">Back to Ballet</a></div></body></html>`;
 
 function notFound(): Response {
-  return new Response(NOT_FOUND, {
-    status: 404,
-    headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=60" },
-  });
+  return new Response(NOT_FOUND, { status: 404, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=60" } });
 }
 
-// Deno Deploy injects PORT; fall back to 8000 for local runs.
 const PORT = Number(Deno.env.get("PORT")) || 8000;
 
 Deno.serve(
   { port: PORT, onListen: ({ port, hostname }) => console.log(`Ballet listening on http://${hostname}:${port}`) },
   async (req: Request): Promise<Response> => {
     const url = new URL(req.url);
-    let { pathname } = url;
-
-    // Ignore obviously-malformed paths.
+    const { pathname } = url;
     if (pathname.includes("..")) return notFound();
 
-    // Directory-style URL without a trailing slash -> redirect to canonical.
-    // This is what makes /swap work identically to /swap/.
     if (pathname.length > 1 && !pathname.endsWith("/") && !/\.[a-z0-9]+$/i.test(pathname)) {
-      let exists = false;
       try {
-        exists = (await Deno.stat(ROOT + pathname)).isDirectory;
-      } catch {
-        exists = false;
-      }
-      if (exists) {
-        return new Response(null, {
-          status: 308,
-          headers: { Location: pathname + "/" + url.search, "Cache-Control": "public, max-age=600" },
-        });
-      }
+        if ((await Deno.stat(ROOT + pathname)).isDirectory) {
+          return new Response(null, { status: 308, headers: { Location: pathname + "/" + url.search, "Cache-Control": "public, max-age=600" } });
+        }
+      } catch { /* fall through to static routing */ }
     }
 
-    const res = await serveDir(req, {
-      fsRoot: ROOT,
-      showDirListing: false,
-      showIndex: true,
-      enableCors: false,
-    });
-
+    const res = await serveDir(req, { fsRoot: ROOT, showDirListing: false, showIndex: true, enableCors: false });
     if (res.status === 404) return notFound();
     return withHeaders(res, pathname);
   },

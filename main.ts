@@ -1,8 +1,7 @@
 /**
  * Ballet — static site server for Deno Deploy
- * ---------------------------------------------------------------------------
  * Serves the pre-rendered site with clean URLs, correct MIME types, caching,
- * a themed 404, and a site-wide support-chat bootstrap.
+ * a themed 404, and a site-wide direct Smartsupp support launcher.
  */
 
 import { serveDir } from "jsr:@std/http@^1.0.0/file-server";
@@ -12,8 +11,8 @@ const IMMUTABLE = /^\/(static|shop|fonts)\//;
 const SHORT_CACHE = /^\/(css\/site\.css|js\/)/;
 
 function injectSiteRuntime(html: string): string {
-  if (!html || html.includes('/js/chat.js')) return html;
-  const runtime = '\n<script src="/js/chat-config.js" defer></script>\n<script src="/js/chat.js" defer></script>\n<script src="/js/chat-hotfix.js" defer></script>\n';
+  if (!html || html.includes('/js/live-chat.js')) return html;
+  const runtime = '\n<script src="/js/chat-config.js" defer></script>\n<script src="/js/live-chat.js" defer></script>\n';
   return html.includes('</body>') ? html.replace('</body>', runtime + '</body>') : html + runtime;
 }
 

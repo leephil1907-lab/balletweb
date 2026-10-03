@@ -8,27 +8,25 @@
    Supported:  smartsupp · tawk · crisp · intercom · zendesk · freshchat
                drift · salesiq · chatwoot · livechat · tidio · gorgias
                whatsapp · telegram · custom (any embed script)
-               webhook (your own bot / API endpoint)
-               demo     (built-in assistant — no key needed)
+               webhook (your own support endpoint)
 
-   If no credentials are filled in, the widget runs in "demo" mode with the
-   built-in Ballet support assistant so the chat always works.
+   If no provider credentials are available, Smartsupp mode remains contact-
+   only; the site does not replace live support with a local chatbot.
    ========================================================================= */
 
 window.BALLET_CHAT_CONFIG = {
 
   /* Pick one, or leave on 'auto' to use whichever block below has a key. */
-  provider: 'auto',   // 'auto' | 'smartsupp' | 'tawk' | 'crisp' | 'intercom' |
+  provider: 'smartsupp', // 'auto' | 'smartsupp' | 'tawk' | 'crisp' | 'intercom' |
                       // 'zendesk' | 'freshchat' | 'drift' | 'salesiq' |
                       // 'chatwoot' | 'livechat' | 'tidio' | 'gorgias' |
-                      // 'whatsapp' | 'telegram' | 'custom' | 'webhook' | 'demo'
+                      // 'whatsapp' | 'telegram' | 'custom' | 'webhook'
 
   /* ---- Smartsupp  --------------------------------------------------- *
-   *  ACTIVE — live agent chat is served by Smartsupp.                   *
+   *  ACTIVE — conversations use the native Smartsupp widget.            *
    *  Dashboard: https://app.smartsupp.com/                              *
-   *  If the Smartsupp widget fails to load (blocked, offline, or the    *
-   *  domain is not yet allowed in your Smartsupp dashboard), the built-in*
-   *  Ballet assistant automatically takes over so chat is never broken. *
+   *  Allow the deployed site hostname in the dashboard if the widget   *
+   *  bootstrap is rejected. No local bot takes over on failure.         *
    * ------------------------------------------------------------------- */
   smartsupp: {
     key: '0f72515f9fb030435a08be49b1610cf6db90dbed',
@@ -38,8 +36,9 @@ window.BALLET_CHAT_CONFIG = {
       // 'email': '',         // pre-fill  e.g. 'jane@example.com'
       // 'variables': { plan: 'pro' }   // custom visitor variables
     },
-    // How long (ms) to wait for the Smartsupp widget before falling back
-    // to the built-in assistant. 0 = wait forever (never fall back).
+    // How long (ms) to wait before showing the contact fallback. The script
+    // continues checking for a late-loaded Smartsupp widget after this delay.
+    // 0 keeps checking indefinitely; no local assistant is shown.
     timeoutMs: 8000
   },
 
@@ -131,7 +130,7 @@ window.BALLET_CHAT_CONFIG = {
     timeoutMs: 15000
   },
 
-  /* ---- Widget chrome (applies to demo / webhook / whatsapp / telegram) -- */
+  /* ---- Widget chrome (used by non-Smartsupp integrations) ------------- */
   ui: {
     title: 'Ballet Support',
     subtitle: 'Typically replies in a few minutes',

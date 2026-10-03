@@ -3,8 +3,8 @@
   "exports": "./main.ts",
   "version": "1.0.0",
   "tasks": {
-    "start": "deno run --allow-net --allow-read main.ts",
-    "dev": "deno run --watch --allow-net --allow-read main.ts",
+    "start": "deno run --allow-net --allow-read --allow-env=PORT main.ts",
+    "dev": "deno run --watch --allow-net --allow-read --allow-env=PORT main.ts",
     "check": "deno check main.ts"
   },
   "imports": {

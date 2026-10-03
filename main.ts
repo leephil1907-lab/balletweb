@@ -20,9 +20,28 @@ const IMMUTABLE = /^\/(static|shop|fonts)\//;
 /** First-party files we may still edit after deploy. */
 const SHORT_CACHE = /^\/(css\/site\.css|js\/)/;
 
-function withHeaders(res: Response, pathname: string): Response {
+function acceptsGzip(request: Request): boolean {
+  const header = request.headers.get("accept-encoding") || "";
+  const encodings = header.split(",").map((part) => part.trim().toLowerCase());
+  const gzip = encodings.find((part) => part.split(";", 1)[0].trim() === "gzip");
+  if (!gzip) return false;
+  const q = gzip.split(";").map((part) => part.trim()).find((part) => part.startsWith("q="));
+  return !q || Number(q.slice(2)) > 0;
+}
+
+function addVary(headers: Headers, value: string): void {
+  const current = headers.get("Vary");
+  if (!current) {
+    headers.set("Vary", value);
+  } else if (!current.split(",").some((item) => item.trim().toLowerCase() === value.toLowerCase())) {
+    headers.set("Vary", `${current}, ${value}`);
+  }
+}
+
+function withHeaders(res: Response, pathname: string, request: Request): Response {
   const type = res.headers.get("content-type") || "";
   const isHtml = type.startsWith("text/html");
+  const compressible = /^(text\/|application\/(?:javascript|json|xml|manifest\+json)|image\/svg\+xml)/i.test(type);
 
   let cacheControl = "public, max-age=600";
 
@@ -41,7 +60,26 @@ function withHeaders(res: Response, pathname: string): Response {
   headers.set("Cache-Control", cacheControl);
   headers.set("X-Content-Type-Options", "nosniff");
   headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
-  return new Response(res.body, { status: res.status, headers });
+
+  let body = res.body;
+  const size = Number(headers.get("Content-Length") || 0);
+  const eligible = compressible && res.status === 200 && body !== null &&
+    (size === 0 || size >= 1024);
+
+  if (eligible) addVary(headers, "Accept-Encoding");
+
+  const canCompress = eligible && request.method === "GET" &&
+    !request.headers.has("range") && !headers.has("Content-Encoding") && acceptsGzip(request);
+  if (canCompress && body) {
+    headers.set("Content-Encoding", "gzip");
+    headers.delete("Content-Length");
+    headers.delete("Content-MD5");
+    headers.delete("ETag");
+    headers.delete("Accept-Ranges");
+    body = body.pipeThrough(new CompressionStream("gzip"));
+  }
+
+  return new Response(body, { status: res.status, statusText: res.statusText, headers });
 }
 
 const NOT_FOUND = `<!doctype html>
@@ -112,6 +150,6 @@ Deno.serve(
     });
 
     if (res.status === 404) return notFound();
-    return withHeaders(res, pathname);
+    return withHeaders(res, pathname, req);
   },
 );

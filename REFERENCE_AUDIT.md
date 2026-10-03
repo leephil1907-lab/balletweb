@@ -31,6 +31,19 @@ The concrete content gap was the Emmy Awards 2026 announcement. The old event ri
 - Improved the material radio group's keyboard behavior with arrow-key selection and a single tab stop.
 - Final checks: JavaScript syntax, HTML structure, CSS parsing, and local preview HTTP routes passed. A physical-device touch test was not available in this workspace.
 
-## Support chat
+## Runtime follow-up — 3 October 2026
 
-The existing Smartsupp provider key/configuration and chat loader were left untouched. The widget still uses the configured Smartsupp connection and its existing built-in fallback if the hosted widget is unavailable or not yet allowed for the deployed domain.
+- Reproduced the missing chat launcher. Smartsupp mode now keeps a small launcher visible during startup, uses the native Smartsupp conversation UI when its widget appears, and does not render a local message composer, saved transcript, canned replies, or bot answers. If the provider is unavailable, the launcher opens a minimal contact fallback instead.
+- The configured Smartsupp bootstrap still returns HTTP 403 on the preview host, so real agent handoff cannot be verified until that hostname is authorized in the Smartsupp dashboard (or the key is corrected). The fallback is intentionally not a chatbot.
+- Long same-page jumps now scroll immediately rather than using a slow multi-screen smooth scroll. Existing hero CTA, mobile menu, FAQ, card flip, How It Works diagram, and navigation behavior remain in the regression pass.
+- Externalized 38 unique inline image payloads that were repeated throughout the homepage, reducing `index.html` from 1,137,967 bytes to 164,285 bytes. Offscreen images, closed-menu artwork, and the legacy-section background now load on demand; the five visible hero press logos remain eager. Removed duplicate font preloads and the external font CSS; the locally served font files now load once each.
+- Added gzip negotiation to the Deno server for text assets. Local Deno verification returned the homepage as 38,178 gzip bytes (164,285 identity bytes) and decompressed byte-for-byte to the source HTML. The local `start`/`dev` tasks now request the narrowly scoped `PORT` environment permission required by Deno.
+- The deployed Deno URL is still serving an older build (its homepage, `main.js`, and `site.css` differ from this workspace), and this checkout has no Git remote configured. These fixes are verified in the local preview but have not been deployed to the public URL.
+
+## Interaction and responsive follow-up — 4 October 2026
+
+- Added silver-finish front/back assets and wired the Gold / Stainless Steel radio group to swap both images and their alt text. The existing 3D flip remains independent; Playwright verified switching material while flipped does not reset the flip.
+- The language control now navigates instead of merely changing its label. All 11 official locale routes were checked over HTTP and returned 200 with matching document-language tags; preview hosts route to the canonical `www.ballet.com` locale, while ballet.com stays same-origin. Keyboard and pointer selection were both smoke-tested.
+- Smartsupp is now explicitly selected in config. The prior custom transcript is removed from local storage; the active UI has no site-side message form, bot greeting, quick replies, or canned responses. The native-widget API uses Smartsupp's documented `chat:open` / `chat:send` commands; the site has no second composer or local transcript. Actual handoff remains unverified because the configured loader/bootstrap returns 403; the preview therefore exposes only a small service/contact fallback. A mocked provider test verified delegation, not a real support session.
+- A 320px responsive audit found the newsletter social links caused 27px of page overflow. They now wrap on narrow screens. The full page and chat panel were checked at 320, 360, 390, 768, 1024, and 1440px; no horizontal overflow or off-screen chat UI remained. JavaScript and same-origin image requests passed without runtime errors.
+- The current local preview is served by Python on port 8000. Nothing has been deployed; the public URL remains on the older build until an authorized deployment is made.

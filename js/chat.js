@@ -1,26 +1,18 @@
 /* =========================================================================
    Ballet Support — live chat widget
    -------------------------------------------------------------------------
-   One drop-in widget, many back ends. It reads window.BALLET_CHAT_CONFIG
-   (see chat-config.js) and:
+   The widget reads window.BALLET_CHAT_CONFIG (see chat-config.js). Live
+   Smartsupp conversations use Smartsupp's native chat UI so messages and
+   replies stay in the support inbox. If Smartsupp is unavailable, this site
+   shows a simple contact fallback; it never invents a local bot reply.
 
-     * if credentials exist for a hosted provider  -> loads that provider's
-       real script and hands the conversation over to it;
-     * if a webhook URL is set                     -> posts each visitor
-       message to your endpoint and renders the JSON reply;
-     * otherwise                                   -> runs the built-in
-       Ballet assistant so the chat always works.
-
-   Everything is namespaced under window.BalletChat and does not touch any
-   other part of the page.
+   Other configured providers and explicit webhook mode remain available for
+   deployments that choose them. No local FAQ bot is bundled. Everything is
+   namespaced under window.BalletChat and does not touch other page features.
 
    Hosted providers supported:  smartsupp · tawk · crisp · intercom · zendesk
                                 freshchat · drift · salesiq · chatwoot
                                 livechat · tidio · gorgias · custom
-
-   A hosted provider that fails to render (blocked, offline, or the current
-   domain is not whitelisted in its dashboard) automatically falls back to the
-   built-in assistant, so the chat is never dead.
    ========================================================================= */
 (function () {
   'use strict';
@@ -81,6 +73,11 @@
     try { window.localStorage.setItem(STORE_KEY, JSON.stringify(session)); } catch (e) {}
     // keep only the last 60 messages
     if (session.history.length > 60) session.history = session.history.slice(-60);
+  }
+
+  function clearStoredChatHistory() {
+    session = { id: uid(), history: [] };
+    try { window.localStorage.removeItem(STORE_KEY); } catch (e) {}
   }
 
   /* --------------------------------------------------------------- styling */
@@ -164,6 +161,10 @@
     '.bl-send:hover{transform:scale(1.07)}.bl-send:disabled{opacity:.4;cursor:not-allowed}',
     '.bl-foot{text-align:center;font-size:10.5px;color:rgba(255,255,255,.35);padding:0 12px 9px;background:#161617}',
     '.bl-foot a{color:rgba(255,255,255,.5)}',
+    '.bl-chat-live .bl-chat-panel{height:auto;min-height:190px;max-height:calc(100vh - 120px)}',
+    '.bl-chat-live .bl-chat-body{min-height:82px;align-items:center;justify-content:center;text-align:center}',
+    '.bl-chat-offline{max-width:270px;color:#e8e8e8;font-size:14px;line-height:1.55;text-align:center}',
+    '.bl-chat-offline a{display:inline-block;margin-top:10px;color:var(--bl-accent);font-weight:650;text-decoration:underline}',
     '@media (max-width:480px){.bl-chat-panel{width:calc(100vw - 32px);height:min(70vh,520px)}',
     '.bl-chat{bottom:16px}}'
   ].join('');
@@ -300,12 +301,13 @@
           s.parentNode.insertBefore(c, s);
         })(document);
 
-        // init() calls this AFTER build() publishes its own API, so the public
-        // open/close/toggle drive Smartsupp while the built-in assistant stays
-        // wired underneath as the fallback.
+        // init() calls this after the small site-side launcher is mounted.
+        // The actual transcript and composer belong to Smartsupp, never to a
+        // local canned-response widget.
         delegator = function () {
           var api = window.BalletChat || {};
-          var ownOpen = api.open, ownClose = api.close, ownToggle = api.toggle;
+          if (api.delegated) return;
+          var ownOpen = api.open, ownClose = api.close, ownToggle = api.toggle, ownSend = api.send;
           var ssOpen = false;
 
           api.mode = 'smartsupp';
@@ -327,17 +329,19 @@
             if (smartsuppReady()) { ssOpen ? api.close() : api.open(); return; }
             if (ownToggle) ownToggle();
           };
-          // Push the visitor's first message into the Smartsupp transcript.
+          // Send through Smartsupp's documented chat:send method so the
+          // visitor message enters the support inbox (never a local transcript).
           api.send = function (text) {
+            var message = String(text || '').trim();
+            if (!message) return;
             if (smartsuppReady()) {
-              try { window.smartsupp('message', text); api.open(); return; } catch (e) {}
+              try {
+                api.open();
+                window.smartsupp('chat:send', message);
+                return;
+              } catch (e) {}
             }
-            var input = document.querySelector('.bl-input');
-            if (input) {
-              input.value = text;
-              var form = document.querySelector('.bl-form');
-              if (form) form.dispatchEvent(new Event('submit', { cancelable: true }));
-            }
+            if (ownSend) ownSend(message);
           };
           window.BalletChat = api;
 
@@ -347,26 +351,37 @@
             api.open = ownOpen;
             api.close = ownClose;
             api.toggle = ownToggle;
+            api.send = ownSend;
           };
         };
 
-        // If Smartsupp never renders, reveal our own launcher and hand the
-        // conversation back to the built-in assistant.
-        if (timeout !== 0) {
-          var t = timeout || 8000;
-          var started = Date.now();
-          (function poll() {
-            if (smartsuppReady()) return;
-            if (Date.now() - started > t) {
-              var el = document.querySelector('.bl-chat');
-              if (el) el.style.display = '';
-              if (undelegate) undelegate();
-              return;
+        // Keep the site-side launcher available until the native widget exists.
+        // After a timeout, retain the contact fallback and continue checking so
+        // a slow-but-valid provider can still take over without a reload.
+        var t = timeout === 0 ? Infinity : (Number(timeout) || 8000);
+        var started = Date.now();
+        var fallbackShown = false;
+        function poll() {
+          var el = document.querySelector('.bl-chat');
+          if (smartsuppReady()) {
+            if (delegator && !(window.BalletChat && window.BalletChat.delegated)) delegator();
+            if (el) {
+              var wasOpen = el.classList.contains('open');
+              el.style.display = 'none';
+              if (wasOpen && window.BalletChat && window.BalletChat.open) window.BalletChat.open();
             }
-            setTimeout(poll, 250);
-          })();
+            return;
+          }
+          if (!fallbackShown && Date.now() - started >= t) {
+            fallbackShown = true;
+            if (el) el.style.display = '';
+            if (undelegate) undelegate();
+          }
+          setTimeout(poll, fallbackShown ? 1200 : 250);
         }
-        return false; // Smartsupp supplies its own launcher
+        // Let init() finish building the launcher/API before the first check.
+        setTimeout(poll, 0);
+        return true; // keep our launcher visible until Smartsupp is confirmed ready
       }
     }
   };
@@ -405,82 +420,12 @@
 
   function resolveProvider() {
     var explicit = (CFG.provider || 'auto').toLowerCase();
-    if (explicit !== 'auto') return explicit;
+    if (explicit !== 'auto') return explicit === 'demo' ? 'smartsupp' : explicit;
     for (var k in PROVIDERS) if (PROVIDERS[k].has()) return k;
     if (CFG.webhook && CFG.webhook.url) return 'webhook';
     if (CFG.whatsapp && CFG.whatsapp.phone) return 'whatsapp';
     if (CFG.telegram && CFG.telegram.username) return 'telegram';
-    return 'demo';
-  }
-
-  /* -------------------------------------------------- built-in assistant */
-  var KB = [
-    { q: /(ship|track|order|delivery|deliver|arriv|where is)/i,
-      a: 'You can track any order from the shipping confirmation email we sent at dispatch. ' +
-         'US orders typically arrive in 3–7 business days, international in 7–21 days. ' +
-         'If you ordered more than 48 hours ago and have no tracking email, reply with your order number and we will chase it up.\n\n' +
-         '— Ballet ships from the US; duties or taxes may apply outside the US.' },
-    { q: /(activat|set ?up|scan|how do i start|first time|quick start)/i,
-      a: 'Activating takes about a minute:\n\n' +
-         '1. Download Ballet Crypto (iOS / Android).\n' +
-         '2. Tap "Add Card" and scan the QR code under the scratch-off panel on the back.\n' +
-         '3. Send crypto to the address shown — that is it. No firmware, no password, no seed phrase.\n\n' +
-         'Full walkthrough: https://www.ballet.com/quick-start/' },
-    { q: /(genuine|authentic|fake|counterfeit|verif|legit)/i,
-      a: 'Only buy from authorised channels and always verify on receipt. Peel the scratch-off panel and check the ' +
-         'code on our verification page — a genuine code is only ever accepted once.\n\n' +
-         'Verify here: https://www.ballet.com/verify/\n' +
-         'More detail: https://support.ballet.com/hc/en-us/articles/39172800302489-Is-my-Ballet-product-genuine' },
-    { q: /(private key|seed|2fkg|key secur)/i,
-      a: 'Ballet never stores your private key. The full key is generated only on your device, only when you ' +
-         'transfer funds out for the first time, and it is never transmitted to us. This is our Two-Factor ' +
-         'Key Generation (2FKG) design.\n\nRead more: https://www.ballet.com/2FKG/' },
-    { q: /(currenc|coin|token|support(ed)? asset|bitcoin|ethereum|xrp|nft)/i,
-      a: 'REAL Series cold storage cards support 1,000+ cryptocurrencies and NFTs. Ballet Cold Storage Coins are ' +
-         'single-currency (Bitcoin or XRP).\n\nFull list: https://www.ballet.com/supported-coins/' },
-    { q: /(gift|give|present|birthday|wedding|occasion)/i,
-      a: 'Load it, wrap it, give it. A Ballet card needs no account, no password and no seed phrase, so the ' +
-         'recipient simply scans and holds it. Crypto Gift Cards are our party favourite: ' +
-         'https://store.ballet.com/products/custom-bitcoin-gift-card' },
-    { q: /(price|cost|how much|\$|buy|purchase|order now|shop)/i,
-      a: 'Current pricing: 24K Gold-Plated Card from $299, Stainless Steel Card from $49, Cold Storage Coin from $29, ' +
-         'Crypto Gift Cards from $49. Every order is covered by a 30-day money-back guarantee and free US shipping.\n\n' +
-         'Shop: https://store.ballet.com/' },
-    { q: /(refund|return|money back|guarantee|cancel)/i,
-      a: 'We offer a 30-day money-back guarantee on unused cards. Start a return and we will issue a refund to your ' +
-         'original payment method within 5–10 business days of receiving the item.\n\n' +
-         'Policy: https://www.ballet.com/money-back-guarantee/' },
-    { q: /(human|agent|person|representative|talk to some)/i,
-      a: 'Of course — you can reach a real person at support@ballet.com or open a ticket at ' +
-         'https://support.ballet.com/. If you tell me what it is about I can collect the details first so the ' +
-         'agent picks it up with full context.' },
-    { q: /(wallet|card) (is )?(lost|stolen|damaged|broken|wet)/i,
-      a: 'A Ballet card is a bearer asset, so whoever holds it controls the funds. Move your crypto out immediately ' +
-         'if you still have the card, or if it is lost sweep the funds to a new wallet the moment you regain access.\n\n' +
-         'The card body itself is waterproof and shock-resistant, but we cannot recover funds from a card you no ' +
-         'longer possess — email support@ballet.com and we will advise on your specific case.' },
-    { q: /(app|download|ios|android|google play|app store)/i,
-      a: 'Ballet Crypto is free on both stores:\niOS — https://apps.apple.com/us/app/id1474912942\n' +
-         'Android — https://play.google.com/store/apps/details?id=com.balletcrypto' },
-    { q: /(business|reseller|co-?brand|collab|affiliate|bulk)/i,
-      a: 'We run co-branded cards, crypto gift cards, collaborations, a reseller programme, crypto business cards ' +
-         'and an affiliate programme. Tell me which one fits and your expected volume and I will route you to the ' +
-         'right team.\n\nAffiliates: https://affiliate.ballet.com/' },
-    { q: /(hello|hi|hey|good (morning|evening|afternoon)|thanks|thank you)/i,
-      a: 'Happy to help! What can I do for you — order help, activation, verifying a product, or something else?' }
-  ];
-
-  function demoReply(text) {
-    var t = String(text || '');
-    for (var i = 0; i < KB.length; i++) {
-      if (KB[i].q.test(t)) return KB[i].a;
-    }
-    return 'Thanks for the message — I have passed that to the support team. In the meantime these usually help:\n\n' +
-           '• Track or change an order — reply with your order number\n' +
-           '• Activate a card — https://www.ballet.com/quick-start/\n' +
-           '• Verify a card — https://www.ballet.com/verify/\n\n' +
-           'For anything else, email support@ballet.com or open a ticket at https://support.ballet.com/ and a ' +
-           'human will pick it up. Average first reply is a few minutes during business hours.';
+    return 'smartsupp';
   }
 
   /* -------------------------------------------------------------- webhook */
@@ -504,7 +449,7 @@
       .then(function (data) {
         clearTimeout(timer);
         var reply = getPath(data, w.replyPath || 'reply') || getPath(data, 'message') || getPath(data, 'answer');
-        return reply || demoReply(text);
+        return reply || 'Support did not return a reply. Please contact support@ballet.com.';
       })
       .catch(function () {
         clearTimeout(timer);
@@ -519,7 +464,8 @@
     root.className = 'bl-chat';
     root.setAttribute('data-mode', mode);
 
-    var providerLabel = mode === 'demo' ? 'Ballet Assistant' : UI.title;
+    var providerLabel = UI.title;
+    var providerSubtitle = UI.subtitle;
 
     root.innerHTML =
       '<button class="bl-chat-launcher" type="button" aria-label="' + esc(UI.launcherLabel) + '" aria-expanded="false">' +
@@ -537,7 +483,7 @@
           '<div class="bl-chat-avatar">BC</div>' +
           '<div class="bl-chat-head-meta">' +
             '<div class="bl-chat-title">' + esc(providerLabel) + '</div>' +
-            '<div class="bl-chat-status"><span class="bl-chat-dot"></span>' + esc(UI.subtitle) + '</div>' +
+            '<div class="bl-chat-status"><span class="bl-chat-dot"></span>' + esc(providerSubtitle) + '</div>' +
           '</div>' +
           '<button class="bl-chat-close" type="button" aria-label="Minimise chat">' +
             '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" ' +
@@ -680,7 +626,7 @@
           'You can reach the team directly on Telegram: https://t.me/' + CFG.telegram.username
         );
       } else {
-        work = Promise.resolve(demoReply(text));
+        work = Promise.reject(new Error('No reply provider configured'));
       }
 
       return new Promise(function (resolve) { setTimeout(function () { resolve(work); }, delay); })
@@ -732,21 +678,128 @@
     };
   }
 
+  /* ------------------------- Smartsupp launcher / unavailable-state UI */
+  function buildSmartsuppShell() {
+    var root = document.createElement('div');
+    root.className = 'bl-chat bl-chat-live';
+    root.setAttribute('data-mode', 'smartsupp');
+    root.innerHTML =
+      '<button class="bl-chat-launcher" type="button" aria-label="' + esc(UI.launcherLabel) + '" ' +
+          'aria-expanded="false" aria-controls="ballet-smartsupp-panel">' +
+        '<svg class="bl-ico-chat" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
+             'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+          '<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 ' +
+          '8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>' +
+        '</svg>' +
+        '<svg class="bl-ico-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" ' +
+             'stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>' +
+      '</button>' +
+      '<div class="bl-chat-panel" id="ballet-smartsupp-panel" role="dialog" aria-label="' + esc(UI.title) + '" ' +
+          'aria-modal="false" aria-hidden="true">' +
+        '<div class="bl-chat-head">' +
+          '<div class="bl-chat-avatar" aria-hidden="true">BC</div>' +
+          '<div class="bl-chat-head-meta"><div class="bl-chat-title">' + esc(UI.title) + '</div>' +
+            '<div class="bl-chat-status">Support</div></div>' +
+          '<button class="bl-chat-close" type="button" aria-label="Close chat">' +
+            '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" ' +
+                 'stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>' +
+          '</button>' +
+        '</div>' +
+        '<div class="bl-chat-body"><div class="bl-chat-offline" role="status" aria-live="polite">' +
+          'Live chat is temporarily unavailable.<br><a href="mailto:support@ballet.com">Email support</a>' +
+        '</div></div>' +
+        '<div class="bl-foot"><a href="https://www.ballet.com/privacy/" target="_blank" ' +
+          'rel="noopener noreferrer">Privacy</a></div>' +
+      '</div>';
+
+    var style = document.createElement('style');
+    style.textContent = CSS;
+    document.head.appendChild(style);
+    document.body.appendChild(root);
+
+    var launcher = $('.bl-chat-launcher', root);
+    var panel = $('.bl-chat-panel', root);
+    var closeButton = $('.bl-chat-close', root);
+    var isOpen = false;
+
+    function setOpen(open) {
+      isOpen = open;
+      root.classList.toggle('open', open);
+      launcher.setAttribute('aria-expanded', open ? 'true' : 'false');
+      panel.setAttribute('aria-hidden', open ? 'false' : 'true');
+    }
+    function open() {
+      if (smartsuppReady()) {
+        if (isOpen) setOpen(false);
+        try { window.smartsupp('chat:open'); return; } catch (e) {}
+      }
+      setOpen(true);
+      setTimeout(function () { closeButton.focus(); }, REDUCED ? 0 : 100);
+    }
+    function close() {
+      if (smartsuppReady()) {
+        try { window.smartsupp('chat:close'); } catch (e) {}
+      }
+      if (isOpen) setOpen(false);
+      launcher.focus();
+    }
+    function toggle() {
+      if (smartsuppReady()) { open(); return; }
+      if (isOpen) close(); else open();
+    }
+
+    launcher.addEventListener('click', toggle);
+    closeButton.addEventListener('click', close);
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && isOpen) close();
+    });
+
+    window.BalletChat = {
+      open: open,
+      close: close,
+      toggle: toggle,
+      // Programmatic sends go through Smartsupp; nothing is stored locally.
+      send: function (text) {
+        var message = String(text || '').trim();
+        if (!message) return;
+        if (smartsuppReady()) {
+          try {
+            window.smartsupp('chat:open');
+            window.smartsupp('chat:send', message);
+            return;
+          } catch (e) {}
+        }
+        open();
+      },
+      mode: 'smartsupp',
+      provider: 'smartsupp',
+      delegated: false,
+      sessionId: null
+    };
+  }
+
   /* ------------------------------------------------------------------ run */
   function init() {
     var mode = resolveProvider();
 
-    // Hosted third-party provider: load it, then mount our own widget.
+    // Smartsupp owns the conversation UI. Clear any old site-side transcript
+    // and mount only a native-widget launcher plus a no-bot contact fallback.
+    if (mode === 'smartsupp') {
+      clearStoredChatHistory();
+      if (PROVIDERS.smartsupp && PROVIDERS.smartsupp.has()) PROVIDERS.smartsupp.load();
+      buildSmartsuppShell();
+      if (delegator) delegator();
+      return;
+    }
+
+    // Other hosted providers retain their configured integration behavior.
     if (PROVIDERS[mode]) {
       var hideOurs = PROVIDERS[mode].load();
       build(mode);
       if (hideOurs === false) {
-        // The provider renders its own launcher — we still mount ours but keep
-        // it out of the way so the site always has a fallback entry point.
         var el = document.querySelector('.bl-chat');
         if (el) el.style.display = 'none';
       }
-      // build() publishes its own API object; let the provider wrap it.
       if (delegator) delegator();
       window.BalletChat.mode = window.BalletChat.mode || mode;
       return;

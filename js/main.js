@@ -87,6 +87,24 @@
       if (!open && returnFocus) burger.focus();
     }
 
+    function loadMenuImages(container) {
+      if (!container) return;
+      $$('img[data-lazy-src]', container).forEach(function (img) {
+        img.src = img.getAttribute('data-lazy-src');
+        img.removeAttribute('data-lazy-src');
+      });
+    }
+
+    // Dropdown artwork is not needed for the initial viewport. Fetch it only
+    // when a visitor opens or focuses the corresponding navigation group.
+    $$('.navbar-haveContent').forEach(function (item) {
+      if (!item.querySelector('img[data-lazy-src]')) return;
+      var loadImages = function () { loadMenuImages(item); };
+      item.addEventListener('mouseenter', loadImages, { once: true });
+      item.addEventListener('focusin', loadImages, { once: true });
+      item.addEventListener('click', loadImages, { once: true });
+    });
+
     if (burger && menu) {
       setMenuOpen(menu.classList.contains('is-active'), false);
       burger.addEventListener('click', function () {
@@ -360,8 +378,8 @@
       });
     }
 
-    var items = $$('.homepage_built_material_item');
     var list = $('.homepage_built_materials');
+    var items = list ? $$('.homepage_built_material_item', list) : [];
     var selected = items.findIndex(function (btn) { return btn.getAttribute('aria-checked') === 'true'; });
     if (selected < 0) selected = 0;
     if (list) list.setAttribute('role', 'radiogroup');
@@ -374,6 +392,19 @@
         btn.setAttribute('role', 'radio');
         btn.setAttribute('tabindex', i === selected ? '0' : '-1');
       });
+
+      // Material selection swaps only the front/back artwork. The flip button
+      // and its orientation stay independent so either finish can be flipped.
+      var material = items[selected].getAttribute('data-material');
+      if (flip && material) {
+        $$('.homepage_built_card_img', flip).forEach(function (img) {
+          var src = img.getAttribute('data-' + material + '-src');
+          var alt = img.getAttribute('data-' + material + '-alt');
+          if (src && img.getAttribute('src') !== src) img.setAttribute('src', src);
+          if (alt) img.setAttribute('alt', alt);
+        });
+        flip.setAttribute('data-material', material);
+      }
       if (moveFocus) items[selected].focus();
     }
     selectMaterial(selected, false);
@@ -776,6 +807,36 @@
   }
 
   /* ---------------------------------------------------------------------
+     12b. Lazy background artwork for the lower-page legacy section
+  --------------------------------------------------------------------- */
+  function initLazyBackgrounds() {
+    var els = $$('.homepage_legacy_bg[data-lazy-bg], .homepage_legacy_bg_mo[data-lazy-bg]');
+    if (!els.length) return;
+
+    function loadBackground(el) {
+      var url = el.getAttribute('data-lazy-bg');
+      if (!url) return;
+      el.style.setProperty('--legacy-bg-image', 'url("' + url + '")');
+      el.classList.add('is-bg-loaded');
+    }
+
+    if (!('IntersectionObserver' in window)) {
+      els.forEach(loadBackground);
+      return;
+    }
+
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (entry.isIntersecting) {
+          loadBackground(entry.target);
+          io.unobserve(entry.target);
+        }
+      });
+    }, { rootMargin: '600px 0px' });
+    els.forEach(function (el) { io.observe(el); });
+  }
+
+  /* ---------------------------------------------------------------------
      13. Anchor links + newsletter
   --------------------------------------------------------------------- */
   function initAnchors() {
@@ -789,7 +850,12 @@
         var header = $('.ballet-layout-header');
         var offset = header ? header.getBoundingClientRect().height : 0;
         var top = target.getBoundingClientRect().top + window.pageYOffset - offset - 8;
-        window.scrollTo({ top: Math.max(0, top), behavior: REDUCED ? 'auto' : 'smooth' });
+        var distance = Math.abs(top - window.pageYOffset);
+        // Long jumps (for example, the hero's Shop Now button to the product
+        // configurator) should respond immediately instead of feeling like a
+        // click did nothing while a multi-screen smooth scroll is underway.
+        var behavior = REDUCED || distance > Math.max(window.innerHeight * 2, 1200) ? 'auto' : 'smooth';
+        window.scrollTo({ top: Math.max(0, top), behavior: behavior });
       });
     });
   }
@@ -833,7 +899,13 @@
       ['Español', '/es/'], ['Русский', '/ru/'], ['日本語', '/ja/'], ['Deutsch', '/de/'],
       ['한국어', '/ko/'], ['Italiano', '/it/'], ['Magyar', '/hu/']
     ];
-    $$('.footer_languagebar_select, .header_languagebar_select').forEach(function (sel) {
+    var host = window.location.hostname.toLowerCase();
+    // Preview builds do not contain the locale pages. Send those previews to
+    // the verified canonical language routes; on ballet.com stay same-origin.
+    var localeOrigin = host === 'ballet.com' || host === 'www.ballet.com'
+      ? window.location.origin : 'https://www.ballet.com';
+
+    $$('.footer_languagebar_select, .header_languagebar_select').forEach(function (sel, index) {
       var trigger = sel.querySelector('.ant-select-selector') || sel;
       var item = sel.querySelector('.ant-select-selection-item');
       var dropdown = sel.querySelector('.footer_languagebar_dropdown, .header_languagebar_dropdown');
@@ -841,33 +913,97 @@
         dropdown = document.createElement('div');
         dropdown.className = sel.classList.contains('footer_languagebar_select')
           ? 'footer_languagebar_dropdown' : 'header_languagebar_dropdown';
-        dropdown.setAttribute('role', 'listbox');
         dropdown.style.cssText = 'position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:120;' +
           'max-height:260px;overflow:auto;display:none;';
-        dropdown.innerHTML = LANGS.map(function (l) {
-          return '<div class="ant-select-item ant-select-item-option" role="option" data-href="' + l[1] + '">' + l[0] + '</div>';
-        }).join('');
         sel.appendChild(dropdown);
       }
+      dropdown.id = dropdown.id || 'ballet-language-list-' + index;
+      dropdown.setAttribute('role', 'listbox');
+      if (!dropdown.querySelector('.ant-select-item-option')) {
+        dropdown.innerHTML = LANGS.map(function (lang) {
+          return '<div class="ant-select-item ant-select-item-option" role="option" data-href="' +
+            lang[1] + '">' + lang[0] + '</div>';
+        }).join('');
+      }
+
+      var options = $$('.ant-select-item-option', dropdown);
+      options.forEach(function (opt) {
+        opt.setAttribute('tabindex', '-1');
+        opt.setAttribute('aria-selected', 'false');
+      });
+      var path = window.location.pathname.replace(/\/+$/, '') || '/';
+      var current = LANGS.find(function (lang) {
+        return (lang[1].replace(/\/+$/, '') || '/') === path;
+      });
+      if (current && item) item.textContent = current[0];
+      if (current) {
+        var currentOption = options.find(function (opt) { return opt.getAttribute('data-href') === current[1]; });
+        if (currentOption) currentOption.setAttribute('aria-selected', 'true');
+      }
+
       trigger.style.cursor = 'pointer';
       trigger.setAttribute('role', 'combobox');
       trigger.setAttribute('tabindex', '0');
-      function toggle(force) {
+      trigger.setAttribute('aria-haspopup', 'listbox');
+      trigger.setAttribute('aria-controls', dropdown.id);
+      trigger.setAttribute('aria-expanded', 'false');
+
+      function toggle(force, focusIndex) {
         var open = dropdown.style.display === 'block';
         var next = typeof force === 'boolean' ? force : !open;
         dropdown.style.display = next ? 'block' : 'none';
         sel.classList.toggle('ant-select-open', next);
+        trigger.setAttribute('aria-expanded', next ? 'true' : 'false');
+        if (next && typeof focusIndex === 'number' && options.length) {
+          options[(focusIndex + options.length) % options.length].focus();
+        }
       }
-      trigger.addEventListener('click', function () { toggle(); });
-      trigger.addEventListener('keydown', function (e) {
-        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
-        if (e.key === 'Escape') toggle(false);
-      });
-      dropdown.addEventListener('click', function (e) {
-        var opt = e.target.closest('.ant-select-item-option');
+      function navigate(opt) {
         if (!opt) return;
+        var path = opt.getAttribute('data-href');
+        if (!path || path.charAt(0) !== '/') return;
         if (item) item.textContent = opt.textContent;
         toggle(false);
+        window.location.assign(localeOrigin + path);
+      }
+
+      trigger.addEventListener('click', function () { toggle(); });
+      trigger.addEventListener('keydown', function (e) {
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+          e.preventDefault();
+          toggle(true, e.key === 'ArrowDown' ? 0 : options.length - 1);
+        } else if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          if (dropdown.style.display === 'block') {
+            navigate(options.find(function (opt) { return opt.getAttribute('aria-selected') === 'true'; }));
+          } else {
+            toggle(true, 0);
+          }
+        } else if (e.key === 'Escape') {
+          toggle(false);
+        }
+      });
+      dropdown.addEventListener('click', function (e) {
+        navigate(e.target.closest('.ant-select-item-option'));
+      });
+      dropdown.addEventListener('keydown', function (e) {
+        var option = e.target.closest('.ant-select-item-option');
+        var i = options.indexOf(option);
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+          e.preventDefault();
+          var step = e.key === 'ArrowDown' ? 1 : -1;
+          options[(i + step + options.length) % options.length].focus();
+        } else if (e.key === 'Home' || e.key === 'End') {
+          e.preventDefault();
+          options[e.key === 'Home' ? 0 : options.length - 1].focus();
+        } else if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          navigate(option);
+        } else if (e.key === 'Escape') {
+          e.preventDefault();
+          toggle(false);
+          trigger.focus();
+        }
       });
       document.addEventListener('click', function (e) {
         if (!sel.contains(e.target)) toggle(false);
@@ -892,6 +1028,7 @@
     initBackToTop();
     initAwardTicker();
     initReveal();
+    initLazyBackgrounds();
     initAnchors();
     initNewsletter();
     initLangSelect();

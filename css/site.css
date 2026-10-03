@@ -73,6 +73,17 @@
 }
 .footer_languagebar_select { color: silver; }
 
+/* Keep the seven social actions inside narrow phones instead of creating
+   a document-wide horizontal scroll from the newsletter section. */
+@media (max-width: 480px) {
+  .homepage_subscribe_social {
+    flex-wrap: wrap;
+    justify-content: center;
+    max-width: 100%;
+  }
+  .homepage_subscribe_social li { flex: 0 0 50px; }
+}
+
 /* --- pinned intro safety ------------------------------------------------- */
 .homepage_pinintro_stage { z-index: 1; }
 .homepage_pinintro_slide { transition: none; }
@@ -193,4 +204,14 @@
 }
 .homepage_built_card_flip {
   touch-action: manipulation;
+}
+
+/* Defer the large legacy-section artwork until visitors scroll near it. */
+.homepage_legacy_bg,
+.homepage_legacy_bg_mo {
+  background-image: none !important;
+}
+.homepage_legacy_bg.is-bg-loaded,
+.homepage_legacy_bg_mo.is-bg-loaded {
+  background-image: var(--legacy-bg-image) !important;
 }

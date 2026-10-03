@@ -9,7 +9,7 @@ import { serveDir } from "jsr:@std/http@^1.0.0/file-server";
 
 const ROOT = import.meta.dirname ?? ".";
 const IMMUTABLE = /^\/(static|shop|fonts)\//;
-const SHORT_CACHE = /^(\/css\/site\.css|\/js\/)$/;
+const SHORT_CACHE = /^\/(css\/site\.css|js\/) /;
 
 function injectSiteRuntime(html: string): string {
   if (!html || html.includes('/js/chat.js')) return html;

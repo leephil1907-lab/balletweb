@@ -332,7 +332,7 @@ body.menu-open .mobilepanel{transform:none}
     });
   });
   document.addEventListener('click',function(){document.querySelectorAll('.navitem.open').forEach(function(x){x.classList.remove('open')})});
-  var io=new IntersectionObserver(function(entries){entries.forEach(function(e){if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target)}}),{threshold:.12});
+  var io=new IntersectionObserver(function(entries){entries.forEach(function(e){if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target)}})},{threshold:.12});
   document.querySelectorAll('.reveal').forEach(function(x){io.observe(x)});
   var quotes=[].slice.call(document.querySelectorAll('.quote')),dots=[].slice.call(document.querySelectorAll('.dot')),idx=0;
   function show(n){idx=n;quotes.forEach(function(q,i){q.classList.toggle('active',i===n)});dots.forEach(function(d,i){d.classList.toggle('active',i===n)})}

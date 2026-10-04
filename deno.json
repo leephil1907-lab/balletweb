@@ -13,5 +13,9 @@
   "compilerOptions": {
     "strict": true
   },
-  "exclude": [".git", "node_modules"]
+  "exclude": [".git", "node_modules"],
+  "deploy": {
+    "org": "leephil1907-lab",
+    "app": "balletweb"
+  }
 }

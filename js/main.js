@@ -534,7 +534,7 @@
     if (!box) return;
 
     var rows = $$('.shopify-module--row--53625', box);
-    var thumbs = $$('.shopify-module--thumbnail--141ee', box);
+    var thumbnailStrip = $('.shopify-module--thumbnailStrip--a318c', box);
     var mainImg = $('.shopify-module--galleryMain--72687 img', box);
     var logos = $$('.shopify-module--logoItem--a339c', box);
     var packs = $$('.shopify-module--packBtn--321f9', box);
@@ -546,6 +546,31 @@
     var prevBtn = $('.shopify-module--galleryArrowPrev--c62e1', box);
     var nextBtn = $('.shopify-module--galleryArrowNext--48a92', box);
 
+    var gallerySets = {
+      gold: [
+        { src: '/static/product-gallery/gold-front.webp', alt: '24K gold-plated Ballet Bitcoin card, front' },
+        { src: '/static/product-gallery/gold-back.webp', alt: '24K gold-plated Ballet Bitcoin card, back' },
+        { src: '/static/product-gallery/gold-handheld.webp', alt: '24K gold-plated Ballet card held in hand' }
+      ],
+      stainless: [
+        { src: '/static/product-gallery/stainless-front.webp', alt: 'Stainless steel Ballet Bitcoin card, front' },
+        { src: '/static/product-gallery/stainless-back.webp', alt: 'Stainless steel Ballet Bitcoin card, back' },
+        { src: '/static/product-gallery/stainless-handheld.webp', alt: 'Stainless steel Ballet card held in hand' }
+      ],
+      coin: [
+        { src: '/static/product-gallery/coin-front.webp', alt: 'Ballet Bitcoin cold storage coin, front' },
+        { src: '/static/product-gallery/coin-back.webp', alt: 'Ballet Bitcoin cold storage coin, back' },
+        { src: '/static/product-gallery/coin-handheld.webp', alt: 'Ballet Bitcoin cold storage coin held in hand' }
+      ],
+      gift: [
+        { src: '/static/product-gallery/gift-set.webp', alt: 'Ballet Bitcoin gift card set' },
+        { src: '/static/product-gallery/gift-front.webp', alt: 'Ballet Bitcoin gift card, front' },
+        { src: '/static/product-gallery/gift-back.webp', alt: 'Ballet Bitcoin gift card, back' },
+        { src: '/static/product-gallery/gift-handheld.webp', alt: 'Ballet Bitcoin gift card held in hand' }
+      ]
+    };
+    var productGalleryKeys = ['gold', 'stainless', 'coin', 'gift'];
+    var thumbs = [];
     var galleryIndex = 0;
     var price = 299;
 
@@ -563,32 +588,64 @@
       }
       thumbs.forEach(function (t, idx) {
         t.classList.toggle('shopify-module--thumbnailActive--6ea04', idx === galleryIndex);
+        t.setAttribute('aria-pressed', idx === galleryIndex ? 'true' : 'false');
       });
     }
-    thumbs.forEach(function (t, i) {
-      t.addEventListener('click', function () { showImage(i); });
-      t.addEventListener('keydown', function (e) {
-        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); showImage(i); }
+    function renderGallery(key) {
+      var images = gallerySets[key] || gallerySets.gold;
+      if (!thumbnailStrip || !mainImg || !images.length) return;
+      thumbnailStrip.textContent = '';
+      images.forEach(function (item, index) {
+        var thumb = document.createElement('div');
+        thumb.className = 'shopify-module--thumbnail--141ee';
+        thumb.setAttribute('role', 'button');
+        thumb.setAttribute('tabindex', '0');
+        thumb.setAttribute('aria-label', 'View ' + item.alt);
+        thumb.setAttribute('aria-pressed', index === 0 ? 'true' : 'false');
+        var img = document.createElement('img');
+        img.src = item.src;
+        img.alt = item.alt;
+        img.width = 100;
+        img.height = 100;
+        img.loading = 'lazy';
+        img.decoding = 'async';
+        thumb.appendChild(img);
+        thumb.addEventListener('click', function () { showImage(index); });
+        thumb.addEventListener('keydown', function (e) {
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); showImage(index); }
+        });
+        thumbnailStrip.appendChild(thumb);
       });
-    });
+      thumbs = $$('.shopify-module--thumbnail--141ee', thumbnailStrip);
+      galleryIndex = 0;
+      showImage(0);
+    }
     if (prevBtn) prevBtn.addEventListener('click', function () { showImage(galleryIndex - 1); });
     if (nextBtn) nextBtn.addEventListener('click', function () { showImage(galleryIndex + 1); });
 
     /* product rows --------------------------------------------------- */
-    rows.forEach(function (row, i) {
-      row.addEventListener('click', function () {
-        rows.forEach(function (r) { r.classList.remove('shopify-module--rowActive--8cbaa'); });
-        row.classList.add('shopify-module--rowActive--8cbaa');
-        var priceEl = row.querySelector('.shopify-module--rowPrice--c54cf');
-        if (priceEl) {
-          price = parseFloat(String(priceEl.textContent).replace(/[^0-9.]/g, '')) || price;
-          updateOrder();
-        }
+    function selectProduct(row, index) {
+      rows.forEach(function (r) {
+        r.classList.remove('shopify-module--rowActive--8cbaa');
+        r.setAttribute('aria-pressed', 'false');
       });
+      row.classList.add('shopify-module--rowActive--8cbaa');
+      row.setAttribute('aria-pressed', 'true');
+      renderGallery(row.getAttribute('data-gallery-key') || productGalleryKeys[index] || 'gold');
+      var priceEl = row.querySelector('.shopify-module--rowPrice--c54cf');
+      if (priceEl) price = parseFloat(String(priceEl.textContent).replace(/[^0-9.]/g, '')) || price;
+      updateOrder();
+    }
+    rows.forEach(function (row, i) {
+      row.addEventListener('click', function () { selectProduct(row, i); });
       row.addEventListener('keydown', function (e) {
         if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); row.click(); }
       });
     });
+    var initialRow = rows.filter(function (row) {
+      return row.classList.contains('shopify-module--rowActive--8cbaa');
+    })[0] || rows[0];
+    if (initialRow) selectProduct(initialRow, rows.indexOf(initialRow));
 
     /* logo / address options ----------------------------------------- */
     function selectLogo(el) {

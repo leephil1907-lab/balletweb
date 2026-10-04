@@ -52,7 +52,7 @@ share description.
 `apple-mobile-web-app-title` and the manifest (`short_name: Ballet`).
 
 **Canonical URLs** — all 27 pages carry `rel="canonical"` and `og:url` pointing
-at `https://balletweb-b90x2z6eqvnp.leephil1907-lab.deno.net/<path>`.
+at `https://balletweb.leephil1907-lab.deno.net/<path>`.
 
 **Descriptions** — every page has its own concise `description` and
 `og:description`; social image alt text describes the actual product imagery.

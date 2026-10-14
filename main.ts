@@ -131,7 +131,7 @@ Deno.serve(
     try {
       const bytes = await Deno.readFile(fileUrl);
       const headers = new Headers({ "Content-Type": type });
-      const response = new Response(req.method === "HEAD" ? null : (type.startsWith("text/html") ? new TextDecoder().decode(bytes).replaceAll("balletweb.leephil1907-lab.deno.net", "balletwallets.online") : bytes), {
+      const response = new Response(req.method === "HEAD" ? null : (type.startsWith("text/html") ? new TextDecoder().decode(bytes) : bytes), {
         status: 200,
         headers,
       });

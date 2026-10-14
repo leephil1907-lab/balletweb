@@ -51,8 +51,7 @@ share description.
 **Name** — `Ballet` across `og:site_name`, `application-name`,
 `apple-mobile-web-app-title` and the manifest (`short_name: Ballet`).
 
-**Canonical URLs** — all 27 pages carry `rel="canonical"` and `og:url` pointing
-at `https://balletweb.leephil1907-lab.deno.net/<path>`.
+**Canonical URLs** — all 27 pages are served with `rel="canonical"`, `og:url`, and absolute social-image URLs using `https://balletwallets.online/<path>`. The Deno Deploy server normalizes the legacy deployment hostname in HTML responses so canonical and social metadata stay aligned with the custom domain.
 
 **Descriptions** — every page has its own concise `description` and
 `og:description`; social image alt text describes the actual product imagery.
